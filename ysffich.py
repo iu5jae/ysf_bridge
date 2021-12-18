@@ -1,3 +1,11 @@
+#   part of ysf_bridge
+#
+#   based on 
+#
+#   Copyright (C) 2009-2016 by Jonathan Naylor G4KLX
+#   Copyright (C) 2018 by Andy Uribe CA6JAU
+#
+
 import ysfconvolution
 import golay24128
 import crc

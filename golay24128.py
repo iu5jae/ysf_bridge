@@ -1,3 +1,10 @@
+#   part of ysf_bridge
+#
+#   based on 
+#
+#   Copyright (C) 2010,2016 by Jonathan Naylor G4KLX
+#   Copyright (C) 2002 by Robert H. Morelos-Zaragoza. All rights reserved.
+#
 
 ENCODING_TABLE_24128 = [
 	0x000000, 0x0018EB, 0x00293E, 0x0031D5, 0x004A97, 0x00527C, 0x0063A9, 0x007B42, 0x008DC6, 0x00952D, 
