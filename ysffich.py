@@ -99,7 +99,10 @@ def decode(byt):
   m_fich[4] = ((b2 << 4) & 0xF0) | ((b3 >> 8) & 0x0F)
   m_fich[5] = (b3 >> 0) & 0xFF
 
-  return m_fich
+  if crc.checkCCITT162(m_fich, 6):
+    return m_fich
+  else:
+    return []
 
 
 
