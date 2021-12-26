@@ -28,8 +28,9 @@ import configparser
 from logging.handlers import RotatingFileHandler
 import signal
 import ysffich
+import ysfpayload
 
-ver = '210612'
+ver = '211225'
 
 a_connesso = False
 b_connesso = False
@@ -364,11 +365,34 @@ def rcv_a():
               ysffich.setVoIP(False)
               bya_msg = bytearray(msgFromServer[0])   
               ysffich.encode(bya_msg)
-              if (FI == 0):  # header
-                lock_dir.acquire()
-                a_b_dir = True
-                b_a_dir = False
-                lock_dir.release()
+              if ((not a_b_dir) and (not b_a_dir)):  # new stream and bridge free
+                if (FI == 0):  # valid HC
+                  lock_dir.acquire()
+                  a_b_dir = True
+                  b_a_dir = False
+                  lock_dir.release()
+                else: # HC missing  
+                  logging.error('rcv_a: add missing HC at ' + bya_msg[4:14].decode() + ' from ' + bya_msg[14:24].decode() + ' to ' + bya_msg[24:34].decode())
+                  # print(bya_msg)
+                  data = [0] * 120
+                  csd1 = [0] * 20
+                  csd2 = [0] * 20
+                  csd1 = (bya_msg[24:34] + bya_msg[14:24])  # destination/source
+                  csd2 = ('          ' + '          ').encode()  # downlink/uplink
+                  try:
+                    ysfpayload.writeHeader(data, csd1, csd2)
+                    bya_msg[35 + ysfpayload.YSF_SYNC_LENGTH_BYTES + ysfpayload.YSF_FICH_LENGTH_BYTES:] = data[ysfpayload.YSF_SYNC_LENGTH_BYTES + ysfpayload.YSF_FICH_LENGTH_BYTES:]
+                  except Exception as e:
+                    logging.error('rcv_a: error writing missing HC ' + str(e))
+                  # print('setto direzioni')
+                  ysffich.setFI(0)
+                  ysffich.encode(bya_msg)
+                  # print(bya_msg)
+                  lock_dir.acquire()
+                  a_b_dir = True
+                  b_a_dir = False
+                  lock_dir.release()
+                  
               lock_b_time.acquire()
               b_tf = 0.0
               lock_b_time.release()
@@ -384,7 +408,8 @@ def rcv_a():
             else:
               s_ycs = 'YSFO' + CALL_A.ljust(10) + (str(YCS_ID_A) + ';').ljust(36)
               q_ba.put(str.encode(s_ycs))
-       
+          else:
+            logging.error('rcv_a: error decoding FICH')  
       except Exception as e:
         logging.error('rcv_a: ' + str(e))
         
@@ -416,14 +441,39 @@ def rcv_b():
               ysffich.setVoIP(False)
               bya_msg = bytearray(msgFromServer[0])   
               ysffich.encode(bya_msg)
-              if (FI == 0):  # header
-                lock_dir.acquire()
-                a_b_dir = False
-                b_a_dir = True
-                lock_dir.release()
+              if ((not a_b_dir) and (not b_a_dir)):  # header and bridge free
+                if (FI == 0):
+                  lock_dir.acquire()
+                  a_b_dir = False
+                  b_a_dir = True
+                  lock_dir.release()
+                else:
+                  logging.error('rcv_b: add missing HC at ' + bya_msg[4:14].decode() + ' from ' + bya_msg[14:24].decode() + ' to ' + bya_msg[24:34].decode())
+                  # print(bya_msg)
+                  data = [0] * 120
+                  csd1 = [0] * 20
+                  csd2 = [0] * 20
+                  csd1 = (bya_msg[24:34] + bya_msg[14:24])  # destination/source
+                  csd2 = ('          ' + '          ').encode()  # downlink/uplink
+                  try:
+                    ysfpayload.writeHeader(data, csd1, csd2)
+                    bya_msg[35 + ysfpayload.YSF_SYNC_LENGTH_BYTES + ysfpayload.YSF_FICH_LENGTH_BYTES:] = data[ysfpayload.YSF_SYNC_LENGTH_BYTES + ysfpayload.YSF_FICH_LENGTH_BYTES:]
+                  except Exception as e:
+                    logging.error('rcv_b: error writing missing HC ' + str(e))
+                  ysffich.setFI(0)
+                  ysffich.encode(bya_msg)
+                  # print('setto direzioni')
+                  # print(bya_msg)
+                  lock_dir.acquire()
+                  a_b_dir = False
+                  b_a_dir = True
+                  lock_dir.release()
+                    
               lock_a_time.acquire()
               a_tf = 0.0
               lock_a_time.release()
+              
+              
               if (a_connesso and b_connesso and b_a_dir):
                 bya_msg[4:14] = str.encode(CALL_A.ljust(10))
                 q_ba.put(bytes(bya_msg))    
@@ -437,7 +487,8 @@ def rcv_b():
             else:
               s_ycs = 'YSFO' + CALL_B.ljust(10) + (str(YCS_ID_B) + ';').ljust(36)
               q_ab.put(str.encode(s_ycs))
-            
+          else:
+             logging.error('rcv_b: error decoding FICH')  
       except Exception as e:
         logging.error('rcv_b: ' + str(e))
     else:
