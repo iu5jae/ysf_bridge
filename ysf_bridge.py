@@ -30,7 +30,7 @@ import signal
 import ysffich
 import ysfpayload
 
-ver = '211225'
+ver = '220130'
 
 a_connesso = False
 b_connesso = False
@@ -234,8 +234,10 @@ sock_b.settimeout(ack_tout + 10.0)
 
 
 def signal_handler(signal, frame):
-  global run, a_connesso, b_connesso
+  global run, a_connesso, b_connesso, arresto
   logging.info('Arresto in corso ...')
+  arresto = True
+  time.sleep(0.5)
   if a_connesso:
     q_ba.put(str.encode(DISCONN_A))
     logging.info('Disconnessione da A')
@@ -357,7 +359,7 @@ def rcv_a():
             # print('FI: ' + str(ysffich.getFI()) + ' - DT: ' + str(ysffich.getDT()))
             # print(msgFromServer[0])
             # print('*****')
-            if (((YCS_A == 1) and (SQL == YCS_ID_A)) or (YCS_A == 0)):
+            if (((YCS_A == 1) and ((SQL == YCS_ID_A) or (SQL == 0))) or (YCS_A == 0)):
               if (YCS_B == 1):
                 ysffich.setSQ(YCS_ID_B)  
               if ((YCS_B == 0) and (SQL != 0)):
@@ -405,7 +407,7 @@ def rcv_a():
                 a_b_dir = False
                 b_a_dir = False
                 lock_dir.release()  
-            else:
+            if ((YCS_A == 1) and (SQL != YCS_ID_A) and (SQL != 0)):
               s_ycs = 'YSFO' + CALL_A.ljust(10) + (str(YCS_ID_A) + ';').ljust(36)
               q_ba.put(str.encode(s_ycs))
           else:
@@ -433,7 +435,7 @@ def rcv_b():
             FI = ysffich.getFI()
             SQL = ysffich.getSQ()
             VOIP = ysffich.getVoIP()
-            if (((YCS_B == 1) and (SQL == YCS_ID_B)) or (YCS_B == 0)):              
+            if (((YCS_B == 1) and ((SQL == YCS_ID_B) or (SQL == 0))) or (YCS_B == 0)):              
               if (YCS_A == 1):
                 ysffich.setSQ(YCS_ID_A)  
               if ((YCS_A == 0) and (SQL != 0)):
@@ -484,7 +486,7 @@ def rcv_b():
                 a_b_dir = False
                 b_a_dir = False
                 lock_dir.release()  
-            else:
+            if ((YCS_B == 1) and (SQL != YCS_ID_B) and (SQL != 0)):
               s_ycs = 'YSFO' + CALL_B.ljust(10) + (str(YCS_ID_B) + ';').ljust(36)
               q_ab.put(str.encode(s_ycs))
           else:
@@ -554,26 +556,27 @@ def keepalive():
   ncnt = 0
   while True:
     ncnt += 1
-    if (a_connesso):
+    if (a_connesso and not arresto):
         q_ba.put(str.encode(keepalive_str_a))
-        if (YCS_A == 1) and (YCS_ID_A > 0) and (ncnt >= 30):
+        if (YCS_A == 1) and (YCS_ID_A > 0) and (ncnt >= 5):
           s_ycs = 'YSFO' + CALL_A.ljust(10) + (str(YCS_ID_A) + ';').ljust(36)
           q_ba.put(str.encode(s_ycs))
         
-    if (b_connesso):
+    if (b_connesso and not arresto):
         q_ab.put(str.encode(keepalive_str_b))
-        if (YCS_B == 1) and (YCS_ID_B > 0) and (ncnt >= 30):
+        if (YCS_B == 1) and (YCS_ID_B > 0) and (ncnt >= 5):
           s_ycs = 'YSFO' + CALL_B.ljust(10) + (str(YCS_ID_B) + ';').ljust(36)
           q_ab.put(str.encode(s_ycs))
     
     
-    if (ncnt >= 30):
+    if (ncnt >= 5):
       ncnt = 0
        
     time.sleep(ack_period)  
 
 
 run = True
+arresto = False
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
