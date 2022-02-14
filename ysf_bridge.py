@@ -30,7 +30,7 @@ import signal
 import ysffich
 import ysfpayload
 
-ver = '220130'
+ver = '220213'
 
 a_connesso = False
 b_connesso = False
@@ -230,8 +230,11 @@ sock_b = socket.socket(socket.AF_INET,
 
 sock_b.settimeout(ack_tout + 10.0)
 
+ycs_a_down = False
+ycs_b_down = False
 
-
+a_connecting = True
+b_connecting = True
 
 def signal_handler(signal, frame):
   global run, a_connesso, b_connesso, arresto
@@ -277,13 +280,15 @@ def conn (sock, lato):
             logging.info('connesso A')
             lock_conn_a.acquire()
             a_connesso = True
-            lock_conn_a.release()             
+            lock_conn_a.release()  
+            a_connecting = True           
             sock.sendto(str.encode('YSFI' + CALL_A.ljust(10) + RX_A + TX_A + LOC_A + LOCATION_A + HS_TY_A + YSFG_ID_A + '   '), (UDP_IP_A, UDP_PORT_A)) 
           else:
             logging.info('connesso A')
             lock_conn_a.acquire()
             a_connesso = True
-            lock_conn_a.release()    
+            lock_conn_a.release() 
+            a_connecting = True    
           lock_a.acquire()
           ack_time_a = 0
           lock_a.release()
@@ -310,13 +315,14 @@ def conn (sock, lato):
             lock_conn_b.acquire()
             b_connesso = True
             lock_conn_b.release()
+            b_connecting = True 
             sock.sendto(str.encode('YSFI' + CALL_B.ljust(10) + RX_B + TX_B + LOC_B + LOCATION_B + HS_TY_B + YSFG_ID_B + '   '), (UDP_IP_B, UDP_PORT_B)) 
           else:
             logging.info('connesso B')
             lock_conn_b.acquire()
             b_connesso = True
             lock_conn_b.release()
-          
+            b_connecting = True 
           lock_b.acquire()
           ack_time_b = 0
           lock_b.release()
@@ -340,12 +346,21 @@ def send_b():
       logging.error('send_b: errore invio a B ' + str(e))
 
 def rcv_a():
-  global a_connesso, b_connesso, a_b_dir, b_a_dir, ack_time_a, a_tf, b_tf
+  global a_connesso, b_connesso, a_b_dir, b_a_dir, ack_time_a, a_tf, b_tf, ycs_a_down, a_connecting
   while True:
     if a_connesso:  
       try:
         msgFromServer = sock_a.recvfrom(bufferSize)
         if ((len(msgFromServer[0]) == 14) and (msgFromServer[0][0:13] == str.encode(ACK_A))):
+          if ((ack_time_a < (1.1 * ack_period)) and ycs_a_down):
+            ycs_a_down = False
+            logging.info('rcv_a: Send YSO string for YCS_A down')
+            s_ycs = 'YSFO' + CALL_A.ljust(10) + (str(YCS_ID_A) + ';').ljust(36)
+            q_ba.put(str.encode(s_ycs)) 
+          
+          if (a_connecting):
+            a_connecting = False
+               
           lock_a.acquire()
           ack_time_a = 0
           lock_a.release()
@@ -356,6 +371,8 @@ def rcv_a():
             FI = ysffich.getFI()
             SQL = ysffich.getSQ()
             VOIP = ysffich.getVoIP()
+            FN = ysffich.getFN()
+            DT = ysffich.getDT()
             # print('FI: ' + str(ysffich.getFI()) + ' - DT: ' + str(ysffich.getDT()))
             # print(msgFromServer[0])
             # print('*****')
@@ -367,7 +384,7 @@ def rcv_a():
               ysffich.setVoIP(False)
               bya_msg = bytearray(msgFromServer[0])   
               ysffich.encode(bya_msg)
-              if ((not a_b_dir) and (not b_a_dir)):  # new stream and bridge free
+              if ((not a_b_dir) and (not b_a_dir) and (FI != 2)):  # new stream and bridge free
                 if (FI == 0):  # valid HC
                   lock_dir.acquire()
                   a_b_dir = True
@@ -395,6 +412,28 @@ def rcv_a():
                   b_a_dir = False
                   lock_dir.release()
                   
+            # clean dgid prefix  
+              if (YCS_A == 1):
+                if ((FN == 1) and (DT == 2)):
+                  dt = [0] * 10
+                  ysfpayload.readDataVDModeData2(bya_msg[35:], dt)  
+                  src_orig = ''
+                  for c in dt:
+                    if ((c > 31) and (c < 127)):
+                      src_orig = src_orig + chr(c)
+                    else:
+                      src_orig = src_orig + chr(32)
+                      
+                  src_spl = src_orig.split('/')
+                  if ((len(src_spl) > 1) and src_spl[0].isnumeric()):
+                    dgid = int(src_spl[0])
+                    if ((dgid > 0) and (dgid < 100)):
+                      data_np = bya_msg[35:]
+                      src = str(src_spl[1]).ljust(10).encode()
+                      ysfpayload.writeVDMmode2Data(data_np, src)
+                      data_mod = bytearray(155)  
+                      bya_msg[35:] = data_np     
+                  
               lock_b_time.acquire()
               b_tf = 0.0
               lock_b_time.release()
@@ -420,12 +459,20 @@ def rcv_a():
 
 
 def rcv_b():
-  global a_connesso, b_connesso, a_b_dir, b_a_dir, ack_time_b, a_tf, b_tf
+  global a_connesso, b_connesso, a_b_dir, b_a_dir, ack_time_b, a_tf, b_tf, ycs_b_down, b_connecting
   while True:
     if b_connesso:
       try:
         msgFromServer = sock_b.recvfrom(bufferSize)
         if ((len(msgFromServer[0]) == 14) and (msgFromServer[0][0:13] == str.encode(ACK_B))):
+          if ((ack_time_b < (1.1 * ack_period)) and ycs_b_down):
+            ycs_b_down = False
+            logging.info('rcv_b: Send YSO string for YCS_B down')
+            s_ycs = 'YSFO' + CALL_B.ljust(10) + (str(YCS_ID_B) + ';').ljust(36)
+            q_ab.put(str.encode(s_ycs)) 
+          if (b_connecting):
+            b_connecting = False
+          
           lock_b.acquire()
           ack_time_b = 0
           lock_b.release()
@@ -435,6 +482,8 @@ def rcv_b():
             FI = ysffich.getFI()
             SQL = ysffich.getSQ()
             VOIP = ysffich.getVoIP()
+            FN = ysffich.getFN()
+            DT = ysffich.getDT()
             if (((YCS_B == 1) and ((SQL == YCS_ID_B) or (SQL == 0))) or (YCS_B == 0)):              
               if (YCS_A == 1):
                 ysffich.setSQ(YCS_ID_A)  
@@ -443,7 +492,7 @@ def rcv_b():
               ysffich.setVoIP(False)
               bya_msg = bytearray(msgFromServer[0])   
               ysffich.encode(bya_msg)
-              if ((not a_b_dir) and (not b_a_dir)):  # header and bridge free
+              if ((not a_b_dir) and (not b_a_dir) and (FI != 2)):  # header and bridge free
                 if (FI == 0):
                   lock_dir.acquire()
                   a_b_dir = False
@@ -470,6 +519,29 @@ def rcv_b():
                   a_b_dir = False
                   b_a_dir = True
                   lock_dir.release()
+
+                  
+            # clean dgid prefix  
+              if (YCS_B == 1):
+                if ((FN == 1) and (DT == 2)):
+                  dt = [0] * 10
+                  ysfpayload.readDataVDModeData2(bya_msg[35:], dt)  
+                  src_orig = ''
+                  for c in dt:
+                    if ((c > 31) and (c < 127)):
+                      src_orig = src_orig + chr(c)
+                    else:
+                      src_orig = src_orig + chr(32)
+                      
+                  src_spl = src_orig.split('/')
+                  if ((len(src_spl) > 1) and src_spl[0].isnumeric()):
+                    dgid = int(src_spl[0])
+                    if ((dgid > 0) and (dgid < 100)):
+                      data_np = bya_msg[35:]
+                      src = str(src_spl[1]).ljust(10).encode()
+                      ysfpayload.writeVDMmode2Data(data_np, src)
+                      data_mod = bytearray(155)  
+                      bya_msg[35:] = data_np     
                     
               lock_a_time.acquire()
               a_tf = 0.0
@@ -499,7 +571,7 @@ def rcv_b():
 
 # clock per gestione keepalive
 def clock ():
- global ack_time_a, ack_time_b, ack_tout, a_tf, b_tf, a_b_dir, b_a_dir
+ global ack_time_a, ack_time_b, ack_tout, a_tf, b_tf, a_b_dir, b_a_dir, ycs_a_down, ycs_b_down
  t = ack_tout * 1.1
  while 1:
      if (a_tf < 5.0):
@@ -530,6 +602,14 @@ def clock ():
        lock_b.acquire()
        ack_time_b +=0.1
        lock_b.release()
+     
+     if ((YCS_A == 1) and (ack_time_a > (ack_period * 1.5)) and a_connesso and not ycs_a_down and not a_connecting):
+       ycs_a_down = True
+       logging.info('clock: YCS_A Down')
+     if ((YCS_B == 1) and (ack_time_b > (ack_period * 1.5)) and b_connesso and not ycs_b_down and not b_connecting):
+       ycs_b_down = True  
+       logging.info('clock: YCS_B Down')
+      
      time.sleep(0.1)
 
 # controllo connessioni
@@ -558,18 +638,18 @@ def keepalive():
     ncnt += 1
     if (a_connesso and not arresto):
         q_ba.put(str.encode(keepalive_str_a))
-        if (YCS_A == 1) and (YCS_ID_A > 0) and (ncnt >= 5):
+        if (YCS_A == 1) and (YCS_ID_A > 0) and (ncnt >= 10):
           s_ycs = 'YSFO' + CALL_A.ljust(10) + (str(YCS_ID_A) + ';').ljust(36)
           q_ba.put(str.encode(s_ycs))
         
     if (b_connesso and not arresto):
         q_ab.put(str.encode(keepalive_str_b))
-        if (YCS_B == 1) and (YCS_ID_B > 0) and (ncnt >= 5):
+        if (YCS_B == 1) and (YCS_ID_B > 0) and (ncnt >= 10):
           s_ycs = 'YSFO' + CALL_B.ljust(10) + (str(YCS_ID_B) + ';').ljust(36)
           q_ab.put(str.encode(s_ycs))
     
     
-    if (ncnt >= 5):
+    if (ncnt >= 10):
       ncnt = 0
        
     time.sleep(ack_period)  
