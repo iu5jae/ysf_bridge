@@ -275,14 +275,22 @@ def conn (sock, lato):
         if (msg == str.encode(ACK_A)):
           if (YCS_A == 1) and (YCS_ID_A > 0):
             s_ycs = 'YSFO' + CALL_A.ljust(10) + (str(YCS_ID_A) + ';').ljust(36)
-            sock.sendto(str.encode(s_ycs), (UDP_IP_A, UDP_PORT_A))  
-            msgFromServer = sock.recvfrom(bufferSize)
-            logging.info('connesso A')
-            lock_conn_a.acquire()
-            a_connesso = True
-            lock_conn_a.release()  
-            a_connecting = True           
-            sock.sendto(str.encode('YSFI' + CALL_A.ljust(10) + RX_A + TX_A + LOC_A + LOCATION_A + HS_TY_A + YSFG_ID_A + '   '), (UDP_IP_A, UDP_PORT_A)) 
+            try:
+              sock.sendto(str.encode(s_ycs), (UDP_IP_A, UDP_PORT_A))  
+            except Exception as e:
+              logging.error('conn: Errore connessione A YCS STR 1 ' + str(e))
+              sock_err = True
+            if (not sock_err):
+              msgFromServer = sock.recvfrom(bufferSize)
+              logging.info('connesso A')
+              lock_conn_a.acquire()
+              a_connesso = True
+              lock_conn_a.release()  
+              a_connecting = True           
+              try: 
+                sock.sendto(str.encode('YSFI' + CALL_A.ljust(10) + RX_A + TX_A + LOC_A + LOCATION_A + HS_TY_A + YSFG_ID_A + '   '), (UDP_IP_A, UDP_PORT_A))
+              except Exception as e:
+                logging.error('conn: Errore connessione A YCS STR 2 ' + str(e))   
           else:
             logging.info('connesso A')
             lock_conn_a.acquire()
@@ -309,14 +317,22 @@ def conn (sock, lato):
         if (msg == str.encode(ACK_B)):
           if (YCS_B == 1) and (YCS_ID_B > 0):
             s_ycs = 'YSFO' + CALL_B.ljust(10) + (str(YCS_ID_B) + ';').ljust(36)
-            sock.sendto(str.encode(s_ycs), (UDP_IP_B, UDP_PORT_B))  
-            msgFromServer = sock.recvfrom(bufferSize)
-            logging.info('connesso B')
-            lock_conn_b.acquire()
-            b_connesso = True
-            lock_conn_b.release()
-            b_connecting = True 
-            sock.sendto(str.encode('YSFI' + CALL_B.ljust(10) + RX_B + TX_B + LOC_B + LOCATION_B + HS_TY_B + YSFG_ID_B + '   '), (UDP_IP_B, UDP_PORT_B)) 
+            try:
+              sock.sendto(str.encode(s_ycs), (UDP_IP_B, UDP_PORT_B))  
+            except Exception as e:
+              logging.error('conn: Errore connessione B YCS STR 1 ' + str(e))
+              sock_err = True
+            if (not sock_err):  
+              msgFromServer = sock.recvfrom(bufferSize)
+              logging.info('connesso B')
+              lock_conn_b.acquire()
+              b_connesso = True
+              lock_conn_b.release()
+              b_connecting = True 
+              try:
+                sock.sendto(str.encode('YSFI' + CALL_B.ljust(10) + RX_B + TX_B + LOC_B + LOCATION_B + HS_TY_B + YSFG_ID_B + '   '), (UDP_IP_B, UDP_PORT_B))
+              except Exception as e:
+                logging.error('conn: Errore connessione B YCS STR 2 ' + str(e))      
           else:
             logging.info('connesso B')
             lock_conn_b.acquire()
