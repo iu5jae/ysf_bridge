@@ -30,7 +30,7 @@ import signal
 import ysffich
 import ysfpayload
 
-ver = '220213'
+ver = '220904'
 
 a_connesso = False
 b_connesso = False
@@ -104,6 +104,11 @@ except:
   YCS_A = 0
 
 try:
+  REM_PREF_A = int(config['A']['remove_prefix'])
+except:
+  REM_PREF_A = 0
+
+try:
   YCS_ID_A = int(config['A']['ycs_ID'])
 except:
   YCS_ID_A = 0    
@@ -152,6 +157,12 @@ try:
   YCS_B = int(config['B']['ycs_connection'])
 except:
   YCS_B = 0
+
+try:
+  REM_PREF_B = int(config['B']['remove_prefix'])
+except:
+  REM_PREF_B = 0
+
 
 try:
   YCS_ID_B = int(config['B']['ycs_ID'])
@@ -429,7 +440,7 @@ def rcv_a():
                   lock_dir.release()
                   
             # clean dgid prefix  
-              if (YCS_A == 1):
+              if ((YCS_A == 1) or (REM_PREF_A == 1)):
                 if ((FN == 1) and (DT == 2)):
                   dt = [0] * 10
                   ysfpayload.readDataVDModeData2(bya_msg[35:], dt)  
@@ -538,7 +549,7 @@ def rcv_b():
 
                   
             # clean dgid prefix  
-              if (YCS_B == 1):
+              if ((YCS_B == 1) or (REM_PREF_B == 1)):
                 if ((FN == 1) and (DT == 2)):
                   dt = [0] * 10
                   ysfpayload.readDataVDModeData2(bya_msg[35:], dt)  
