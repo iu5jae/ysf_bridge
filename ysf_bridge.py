@@ -30,7 +30,7 @@ import signal
 import ysffich
 import ysfpayload
 
-ver = '220904'
+ver = '221022'
 
 a_connesso = False
 b_connesso = False
@@ -292,7 +292,6 @@ def conn (sock, lato):
               logging.error('conn: Errore connessione A YCS STR 1 ' + str(e))
               sock_err = True
             if (not sock_err):
-              msgFromServer = sock.recvfrom(bufferSize)
               logging.info('connesso A')
               lock_conn_a.acquire()
               a_connesso = True
@@ -334,7 +333,6 @@ def conn (sock, lato):
               logging.error('conn: Errore connessione B YCS STR 1 ' + str(e))
               sock_err = True
             if (not sock_err):  
-              msgFromServer = sock.recvfrom(bufferSize)
               logging.info('connesso B')
               lock_conn_b.acquire()
               b_connesso = True
