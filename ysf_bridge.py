@@ -29,8 +29,9 @@ from logging.handlers import RotatingFileHandler
 import signal
 import ysffich
 import ysfpayload
+import hashlib
 
-ver = '221022'
+ver = '231015'
 
 a_connesso = False
 b_connesso = False
@@ -143,6 +144,22 @@ try:
 except:
   YSFG_ID_A = ' '.ljust(7)
 
+# enable authentication style BM direct
+try:
+  AUTH_A = int(config['A']['auth'])
+except:
+  AUTH_A = 0
+
+try:
+  PASSWORD_A = bytes(config['A']['password'].strip(), 'utf-8')
+except:
+  PASSWORD_A = bytes('', 'utf-8')
+  
+try:
+  OPTIONS_A = config['A']['options']
+except:
+  OPTIONS_A = ''
+
 
 # "B" side
 UDP_IP_B = config['B']['address']
@@ -209,24 +226,30 @@ while (len(CALL_A) != 10):
 
 while (len(CALL_B) != 10):
 	CALL_B += ' '
-    
-MESSAGE_A = 'YSFP' + CALL_A # stringa connessione "A"
-MESSAGE_B = 'YSFP' + CALL_B # stringa connessione "B"
+if (AUTH_A == 1):    
+  MESSAGE_A = 'YSFL' + CALL_A # stringa connessione "A"
+else:  
+  MESSAGE_A = 'YSFP' + CALL_A # stringa connessione "A"
+
+MESSAGE_B = 'YSFP' + CALL_B   # stringa connessione "B"
 
 DISCONN_A = 'YSFU'  # stringa disconnessione "A"
 DISCONN_B = 'YSFU'  # stringa disconnessione "B"
 
-# stringa di ACK connessione che dipende
-# dalla versione del protocollo
+if (AUTH_A == 1):
+  ACK_A =   '              '
+else:  
+  ACK_A = 'YSFPREFLECTOR '
+#ACK_A =   'YSFPBM_2222  '
 
-ACK_A = 'YSFPREFLECTOR'
-ACK_B = 'YSFPREFLECTOR'
 
-CALL_A = CALL_A.strip()
-CALL_B = CALL_B.strip()
+ACK_B = 'YSFPREFLECTOR '
 
-keepalive_str_a = MESSAGE_A
-keepalive_str_b = MESSAGE_B 
+#CALL_A = CALL_A.strip()
+#CALL_B = CALL_B.strip()
+
+keepalive_str_a = 'YSFP' + CALL_A
+keepalive_str_b = 'YSFP' + CALL_B 
 
 
 # socket connessione A
@@ -267,8 +290,8 @@ def signal_handler(signal, frame):
  
 
 def conn (sock, lato):
-    global a_connesso, b_connesso
-    if (lato == 'A'):
+    global a_connesso, b_connesso, ACK_A
+    if ((lato == 'A') and (AUTH_A == 0)):
       logging.info('conn: provo a connettere A') 
       try:
         sock.sendto(str.encode(MESSAGE_A), (UDP_IP_A, UDP_PORT_A))
@@ -281,7 +304,7 @@ def conn (sock, lato):
         
         # scelgo la stringa giusta da verificare
         
-        msg = msgFromServer[0][0:13]
+        msg = msgFromServer[0][0:14]
         
         if (msg == str.encode(ACK_A)):
           if (YCS_A == 1) and (YCS_ID_A > 0):
@@ -310,6 +333,58 @@ def conn (sock, lato):
           lock_a.acquire()
           ack_time_a = 0
           lock_a.release()
+  
+    # Connection to BM YSF DIRECT
+    if ((lato == 'A') and (AUTH_A == 1)):
+      logging.info('conn: provo a connettere A') 
+      try:
+        sock.sendto(str.encode(MESSAGE_A), (UDP_IP_A, UDP_PORT_A))
+        # print(str.encode(MESSAGE_A))
+        msgFromServer = sock.recvfrom(bufferSize)
+        # print(msgFromServer[0])
+        sock_err = False
+      except Exception as e:
+        logging.error('conn: Errore connessione A ' + str(e))
+        sock_err = True
+      if (not sock_err):  
+        msg = msgFromServer[0][0:16]
+        # print(msg)
+        if ((len(msg) == 16) and (msg[0:6] == b'YSFACK')):
+          ACK_A = 'YSFP' + msg[6:16].decode("utf-8") 
+          key = msgFromServer[0][16:20]
+          s_auth = bytes('YSFK' + CALL_A.ljust(10), 'utf-8') + hashlib.sha256(key + PASSWORD_A).digest() 
+          
+          try:
+            sock.sendto(s_auth, (UDP_IP_A, UDP_PORT_A))
+           # print(s_auth)
+            msgFromServer = sock.recvfrom(bufferSize)
+            # print(msgFromServer[0])
+          except Exception as e:
+            logging.error('conn: Errore connessione A BM invio password ' + str(e))
+            sock_err = True
+          # print(str.encode('YSFACK' + ACK_A[4:14]))
+          if ((not sock_err) and (len(msg) == 16) and (msg[0:16] == str.encode('YSFACK' + ACK_A[4:14]))): 
+            s_ycs = 'YSFO' + CALL_A.ljust(10) + OPTIONS_A
+            try:
+              sock.sendto(str.encode(s_ycs), (UDP_IP_A, UDP_PORT_A))
+              msgFromServer = sock.recvfrom(bufferSize)
+            except Exception as e:
+              logging.error('conn: Errore connessione A BM invio Options ' + str(e))
+              sock_err = True
+           
+            
+            if ((not sock_err) and (len(msg) == 16) and (msg[0:16] == str.encode('YSFACK' + ACK_A[4:14]))):
+              logging.info('connesso A')
+              lock_conn_a.acquire()
+              a_connesso = True
+              lock_conn_a.release()  
+              a_connecting = True           
+                 
+              lock_a.acquire()
+              ack_time_a = 0
+              lock_a.release()
+
+
          
     if (lato == 'B'): 
       logging.info('conn: provo a connettere B')
@@ -322,7 +397,7 @@ def conn (sock, lato):
         sock_err = True
       if (not sock_err):  
         
-        msg = msgFromServer[0][0:13]
+        msg = msgFromServer[0][0:14]
         
         if (msg == str.encode(ACK_B)):
           if (YCS_B == 1) and (YCS_ID_B > 0):
@@ -376,7 +451,8 @@ def rcv_a():
     if a_connesso:  
       try:
         msgFromServer = sock_a.recvfrom(bufferSize)
-        if ((len(msgFromServer[0]) == 14) and (msgFromServer[0][0:13] == str.encode(ACK_A))):
+        #print(msgFromServer[0])
+        if ((len(msgFromServer[0]) == 14) and (msgFromServer[0][0:14] == str.encode(ACK_A))):
           if ((ack_time_a < (1.1 * ack_period)) and ycs_a_down):
             ycs_a_down = False
             logging.info('rcv_a: Send YSO string for YCS_A down')
@@ -489,7 +565,8 @@ def rcv_b():
     if b_connesso:
       try:
         msgFromServer = sock_b.recvfrom(bufferSize)
-        if ((len(msgFromServer[0]) == 14) and (msgFromServer[0][0:13] == str.encode(ACK_B))):
+        # print(msgFromServer[0]) 
+        if ((len(msgFromServer[0]) == 14) and (msgFromServer[0][0:14] == str.encode(ACK_B))):
           if ((ack_time_b < (1.1 * ack_period)) and ycs_b_down):
             ycs_b_down = False
             logging.info('rcv_b: Send YSO string for YCS_B down')
@@ -663,13 +740,14 @@ def keepalive():
     ncnt += 1
     if (a_connesso and not arresto):
         q_ba.put(str.encode(keepalive_str_a))
-        if (YCS_A == 1) and (YCS_ID_A > 0) and (ncnt >= 10):
+       # print(str.encode(keepalive_str_a))
+        if (YCS_A == 1) and (YCS_ID_A > 0) and (ncnt >= 5):
           s_ycs = 'YSFO' + CALL_A.ljust(10) + (str(YCS_ID_A) + ';').ljust(36)
           q_ba.put(str.encode(s_ycs))
         
     if (b_connesso and not arresto):
         q_ab.put(str.encode(keepalive_str_b))
-        if (YCS_B == 1) and (YCS_ID_B > 0) and (ncnt >= 10):
+        if (YCS_B == 1) and (YCS_ID_B > 0) and (ncnt >= 5):
           s_ycs = 'YSFO' + CALL_B.ljust(10) + (str(YCS_ID_B) + ';').ljust(36)
           q_ab.put(str.encode(s_ycs))
     
