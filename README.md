@@ -6,6 +6,7 @@ a) YSF reflector <> YSF Reflector<br>
 b) YSF reflector <> YCS server<br>
 c) YSF reflector <> XLX reflector<br>
 d) YSF reflector <> master BrandMeister (YSF Direct mode)<br>
+... and related combinations.<br>
 
 The use of pYSF reflector is recommended if there is no need to manage multiple flows, otherwise pYSF3. Below are the links to the respective software:<br>
 https://github.com/iu5jae/pYSFReflector<br>
@@ -18,4 +19,6 @@ Address and port must be specified for each endpoint of the systems to be connec
 
 To run ysf_bridge the syntax is:
 /opt/ysf_bridge2/ysf_bridge.py /opt/ysf_bridge2/ysf_bridge.ini<br>
-check the correct path, also in the . service if this execution mode is used.
+check the correct path, also in the . service if this execution mode is used.<br>
+
+Please note: this experimental software is for amateur radio use only, no guarantee of good operation is assumed, and no form of support is given. Respect the rules that system administrators indicate and do not make connections between networks or systems without having given prior information and received approval. Respect for each other and for what is in place is fundamental.
