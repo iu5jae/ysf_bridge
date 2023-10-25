@@ -1,5 +1,21 @@
 # ysf_bridge
 
-for information see:
+The software requires Python version 3 and allows the connection between the following systems operating in C4FM with YSF protocol:
 
-https://www.grupporadiofirenze.net/2021/05/18/ysf_bridge-anche-il-c4fm-ha-il-suo-collettore-per-unire-ysf-con-xlx-e-ycs/
+a) YSF reflector <> YSF Reflector
+b) YSF reflector <> YCS server
+c) YSF reflector <> XLX reflector
+d) YSF reflector <> master BM (YSF Direct mode)
+
+The use of pYSF reflector is recommended if there is no need to manage multiple flows, otherwise pYSF3. Below are the links to the respective software:
+https://github.com/iu5jae/pYSFReflector
+https://github.com/iu5jae/pYSFReflector3
+
+ysf_bridge is recommended to run from /opt/ysf_bridge2 directory and is managed by the ysf_bridge.ini file
+Check the log path.
+A Callsign-nn can be indicated (to manage fixed connections between systems, e.g. pYSF3) where nn = DGID in use or by enabling ycs_connection = 1 specify the fixed DGID ycs_ID = nn
+Address and port must be specified for each endpoint of the systems to be connected together, while the Direct mode connection is for endpoint A only and is used to directly connect the BM master, with the same password as that entered in the BM/hotspot self care . In Direct mode the TalkGroup to use (DMR side) is specified in options=group=22251 for example and the authentication DMR ID in ysfgateway_ID.
+
+To run ysf_bridge the syntax is:
+/opt/ysf_bridge2/ysf_bridge.py /opt/ysf_bridge2/ysf_bridge.ini
+check the correct path, also in the . service if this execution mode is used.
