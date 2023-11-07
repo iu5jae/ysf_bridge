@@ -8,7 +8,7 @@ Type=simple
 Restart=always
 RestartSec=10
 User=root
-ExecStart=/opt/ysf_bridge2/ysf_bridge.py /opt/ysf_bridge2/ysf_bridge.ini
+ExecStart=/opt/ysf_bridge/ysf_bridge.py /opt/ysf_bridge/ysf_bridge.ini
 
 [Install]
 WantedBy=multi-user.target
